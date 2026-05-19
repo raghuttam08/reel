@@ -36,7 +36,7 @@ export default function Footer() {
               Explore
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[['/', 'Shows'], ['/feed', 'Feed'], ['/search', 'Discover']].map(([path, label]) => (
+              {[['/', 'Shows'], ['/feed', 'Feed'], ['/search', 'Discover'], ['/watchlist', 'Watchlist']].map(([path, label]) => (
                 <Link key={path} to={path} style={{
                   fontSize: 13, color: 'var(--ink-muted)',
                   transition: 'color 0.15s',
@@ -56,6 +56,25 @@ export default function Footer() {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[['/login', 'Sign in'], ['/register', 'Register'], ['/post', 'Post a reaction']].map(([path, label]) => (
+                <Link key={path} to={path} style={{
+                  fontSize: 13, color: 'var(--ink-muted)',
+                  transition: 'color 0.15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-muted)'}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-faint)', marginBottom: 12 }}>
+              Legal
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[['/about', 'About'], ['/contact', 'Contact'], ['/privacy', 'Privacy']].map(([path, label]) => (
                 <Link key={path} to={path} style={{
                   fontSize: 13, color: 'var(--ink-muted)',
                   transition: 'color 0.15s',

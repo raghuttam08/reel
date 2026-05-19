@@ -5,7 +5,10 @@ import { enrichShow, posterUrl, backdropUrl, placeholderPoster } from '../lib/tm
 import LifecycleTimeline from '../components/LifecycleTimeline'
 import FeedCard from '../components/FeedCard'
 import { PostForm, ToneTags, HonestStats } from '../components/components'
+import UpgradeModal from '../components/UpgradeModal'
 import api from '../lib/api'
+import { watchlistService } from '../lib/watchlist'
+import { aiService } from '../lib/ai'
 
 function hashName(name) {
   let h = 0
@@ -37,6 +40,11 @@ export default function ShowPage() {
   const [userPosts, setUserPosts] = useState([])
   const [imgErr, setImgErr]     = useState(false)
   const [apiPosts, setApiPosts] = useState([])
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [isInWatchlist, setIsInWatchlist] = useState(false)
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const [aiInfo, setAiInfo] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
   useEffect(() => {
     if (!show) return
     enrichShow(show).then(setEnriched)
@@ -49,6 +57,33 @@ export default function ShowPage() {
     .catch(() => setApiPosts(FEED_POSTS.filter(p => p.show_name === show.show_name)))
 }, [show?.show_name])
 
+  // Check if show is in watchlist
+  useEffect(() => {
+    if (!show) return
+    const token = localStorage.getItem('reel_token')
+    if (!token) {
+      setIsInWatchlist(false)
+      return
+    }
+    watchlistService.isInWatchlist(show.show_name)
+      .then(isIn => setIsInWatchlist(isIn))
+      .catch(() => setIsInWatchlist(false))
+  }, [show?.show_name])
+
+  // Generate AI info if no posts available
+  useEffect(() => {
+    if (!show || apiPosts.length > 0) return
+    
+    setAiLoading(true)
+    aiService.generateShowInfo(show.show_name, show.release_year, enriched?.overview || show.overview)
+      .then(data => setAiInfo(data))
+      .catch(err => {
+        console.error('Failed to generate AI info:', err)
+        setAiInfo(null)
+      })
+      .finally(() => setAiLoading(false))
+  }, [show?.show_name, apiPosts.length, enriched?.overview, show?.overview])
+
   if (!show) return (
     <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--ink-muted)' }}>
       <p style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 22, marginBottom: 12 }}>
@@ -57,6 +92,25 @@ export default function ShowPage() {
       <Link to="/" style={{ fontSize: 13, color: 'var(--ink-faint)' }}>← Back home</Link>
     </div>
   )
+
+  const handleWatchlistToggle = async () => {
+    const token = localStorage.getItem('reel_token')
+    if (!token) {
+      alert('Please log in to use watchlist')
+      return
+    }
+    
+    try {
+      setWatchlistLoading(true)
+      await watchlistService.toggleWatchlist(show.show_name, isInWatchlist)
+      setIsInWatchlist(!isInWatchlist)
+    } catch (err) {
+      console.error('Failed to toggle watchlist:', err)
+      alert('Failed to update watchlist')
+    } finally {
+      setWatchlistLoading(false)
+    }
+  }
 
   const data       = enriched || show
   const accent     = ACCENT_COLORS[hashName(show.show_name) % ACCENT_COLORS.length]
@@ -82,6 +136,20 @@ export default function ShowPage() {
   }, 600)
   setTab('safe')
 }
+
+  const handlePostUpdate = (postId, updatedPost) => {
+    // Update in userPosts
+    setUserPosts(prev => prev.map(p => p._id === postId || p.id === postId ? updatedPost : p))
+    // Update in apiPosts
+    setApiPosts(prev => prev.map(p => p._id === postId ? updatedPost : p))
+  }
+
+  const handlePostDelete = (postId) => {
+    // Remove from userPosts
+    setUserPosts(prev => prev.filter(p => p._id !== postId && p.id !== postId))
+    // Remove from apiPosts
+    setApiPosts(prev => prev.filter(p => p._id !== postId))
+  }
 
   return (
     <div>
@@ -216,8 +284,35 @@ export default function ShowPage() {
                 >
                   Share reaction
                 </button>
-                <button className="btn-dark" style={{ padding: '11px 18px' }}>
-                  + Watchlist
+                <button 
+                  onClick={handleWatchlistToggle}
+                  disabled={watchlistLoading}
+                  className="btn-dark" 
+                  style={{ 
+                    padding: '11px 18px',
+                    opacity: watchlistLoading ? 0.6 : 1,
+                    cursor: watchlistLoading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isInWatchlist ? '✓ In Watchlist' : '+ Watchlist'}
+                </button>
+                <button
+                  onClick={() => setShowUpgradeModal(true)}
+                  style={{
+                    padding: '11px 18px',
+                    background: 'linear-gradient(135deg, #d4a853, #c4933a)',
+                    border: 'none',
+                    borderRadius: 6,
+                    color: '#1a1a1a',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                >
+                  ⭐ Upgrade
                 </button>
               </div>
             </div>
@@ -317,15 +412,103 @@ export default function ShowPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {tab === 'safe'
               ? safePosts.length
-                ? safePosts.map((p, i) => <FeedCard key={p.id ?? i} post={p} />)
-                : <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '20px 0' }}>No safe posts yet — be the first.</p>
+                ? safePosts.map((p, i) => <FeedCard key={p._id ?? p.id ?? i} post={p} onPostUpdate={handlePostUpdate} onPostDelete={handlePostDelete} />)
+                : <>
+                    <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '20px 0' }}>No safe posts yet — be the first.</p>
+                    {aiInfo && (
+                      <div style={{
+                        background: 'linear-gradient(135deg, rgba(212,168,83,0.12), rgba(212,168,83,0.06))',
+                        border: '2px solid rgba(212,168,83,0.25)',
+                        borderRadius: 14,
+                        padding: 24,
+                        marginTop: 16
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                          <div style={{ fontSize: 18 }}>✨</div>
+                          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'brown', margin: 0 }}>
+                            AI Insights
+                          </p>
+                        </div>
+                        
+                        {aiInfo.audienceReaction && (
+                          <p style={{ fontSize: 13, color: 'brown', marginBottom: 16, lineHeight: 1.7, fontWeight: 500 }}>
+                            {aiInfo.audienceReaction}
+                          </p>
+                        )}
+                        
+                        {aiInfo.keyThemes && aiInfo.keyThemes.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color: 'brown', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Key Themes</p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                              {aiInfo.keyThemes.map((theme, i) => (
+                                <span key={i} style={{
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: '#fff9f0',
+                                  background: 'rgba(212,168,83,0.32)',
+                                  border: '2px solid rgba(212,168,83,0.45)',
+                                  padding: '8px 16px',
+                                  borderRadius: 24,
+                                  display: 'inline-block',
+                                  boxShadow: '0 2px 8px rgba(212,168,83,0.12)'
+                                }}>
+                                  {theme}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {aiInfo.bestFor && (
+                          <div style={{ marginBottom: 16, backgroundColor: 'rgba(212,168,83,0.12)', padding: 14, borderRadius: 10, borderLeft: '4px solid rgba(212,168,83,0.4)' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(212,168,83,0.9)', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              📺 Best for
+                            </p>
+                            <p style={{ fontSize: 13, color: 'brown', margin: 0, lineHeight: 1.7, fontWeight: 500 }}>
+                              {aiInfo.bestFor}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {aiInfo.trigger_warnings && aiInfo.trigger_warnings.length > 0 && (
+                          <div style={{ padding: 12, background: 'rgba(224,112,96,0.14)', borderLeft: '4px solid rgba(224,112,96,0.5)', marginBottom: 14, borderRadius: '0 6px 6px 0' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(224,112,96,0.9)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>⚠️ Content Notes</p>
+                            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, color: 'rgba(224,112,96,0.8)', lineHeight: 1.5 }}>
+                              {aiInfo.trigger_warnings.map((warning, i) => (
+                                <li key={i} style={{ marginBottom: 4 }}>{warning}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {aiInfo.fun_fact && (
+                          <p style={{ fontSize: 12, color: 'rgba(212,168,83,0.85)', marginTop: 12, lineHeight: 1.6, fontStyle: 'italic', borderTop: '1px solid rgba(212,168,83,0.15)', paddingTop: 12 }}>
+                            💡 <strong>Fun Fact:</strong> {aiInfo.fun_fact}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {aiLoading && (
+                      <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '20px 0', fontStyle: 'italic' }}>Generating insights...</p>
+                    )}
+                  </>
               : spoilerPosts.length
-                ? spoilerPosts.map((p, i) => <FeedCard key={p.id ?? i} post={p} spoilerBlur />)
+                ? spoilerPosts.map((p, i) => <FeedCard key={p._id ?? p.id ?? i} post={p} spoilerBlur onPostUpdate={handlePostUpdate} onPostDelete={handlePostDelete} />)
                 : <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '20px 0' }}>No spoiler posts yet.</p>
             }
           </div>
         </section>
       </div>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onSuccess={(plan) => {
+          console.log('Upgrade successful:', plan)
+          // Handle upgrade success - update user context, show message, etc.
+        }}
+      />
     </div>
   )
 }

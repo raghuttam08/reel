@@ -6,6 +6,10 @@ import ShowPage from './pages/ShowPage'
 import Feed from './pages/Feed'
 import { LoginPage, RegisterPage } from './pages/Auth'
 import { Search, PostPage } from './pages/pages'
+import Watchlist from './pages/Watchlist'
+import About from './pages/About'
+import Contact from './pages/Contact'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 import Footer from './components/Footer'
 
 export default function App() {
@@ -20,6 +24,10 @@ export default function App() {
             <Route path="/feed"       element={<Feed />} />
             <Route path="/search"     element={<Search />} />
             <Route path="/post"       element={<PostPage />} />
+            <Route path="/watchlist"  element={<Watchlist />} />
+            <Route path="/about"      element={<About />} />
+            <Route path="/contact"    element={<Contact />} />
+            <Route path="/privacy"    element={<PrivacyPolicy />} />
             <Route path="/login"      element={<LoginPage />} />
             <Route path="/register"   element={<RegisterPage />} />
           </Routes>

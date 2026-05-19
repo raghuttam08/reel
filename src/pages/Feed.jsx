@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FEED_POSTS } from '../data/shows'
 import FeedCard from '../components/FeedCard'
+import api from '../lib/api'
 
 const PER_PAGE = 10
 
 export default function Feed() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState('trending')
+  const [posts, setPosts] = useState([...FEED_POSTS])
 
   const page = parseInt(searchParams.get('page') || '1')
 
-  const sorted = [...FEED_POSTS].sort((a, b) =>
+  const sorted = [...posts].sort((a, b) =>
     tab === 'trending'
       ? b.score - a.score
       : new Date(b.published) - new Date(a.published)
@@ -28,6 +30,14 @@ export default function Feed() {
   const switchTab = (t) => {
     setTab(t)
     goPage(1)
+  }
+
+  const handlePostDelete = (postId) => {
+    setPosts(prev => prev.filter(p => p._id !== postId && p.id !== postId))
+  }
+
+  const handlePostUpdate = (postId, updatedPost) => {
+    setPosts(prev => prev.map(p => p._id === postId || p.id === postId ? updatedPost : p))
   }
 
   return (
@@ -80,7 +90,7 @@ export default function Feed() {
       {/* Posts */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
         {paginated.map(post => (
-          <FeedCard key={post.id} post={post} />
+          <FeedCard key={post._id ?? post.id} post={post} onPostUpdate={handlePostUpdate} onPostDelete={handlePostDelete} />
         ))}
       </div>
 

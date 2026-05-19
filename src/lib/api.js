@@ -53,6 +53,12 @@ export const api = {
   // Create a post (requires auth)
   createPost: (post) => req('POST', '/api/posts', post),
 
+  // Update a post (requires auth)
+  updatePost: (id, updates) => req('PUT', `/api/posts/${id}`, updates),
+
+  // Delete a post (requires auth)
+  deletePost: (id) => req('DELETE', `/api/posts/${id}`),
+
   // Like a post (requires auth)
   likePost: (id) => req('POST', `/api/posts/${id}/like`),
 
